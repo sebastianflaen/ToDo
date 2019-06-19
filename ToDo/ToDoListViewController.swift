@@ -10,12 +10,15 @@ import UIKit
 
 class ToDoListViewController: UITableViewController {
     
-    var itemArray = ["Seb"]
+    var itemArray = [""]
+    let defaults = UserDefaults.standard //persistent local data storage
 
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
-        
+        if let items = defaults.array(forKey: "ToDoListArray") as? [String]{
+            itemArray = items
+        }
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -51,6 +54,9 @@ class ToDoListViewController: UITableViewController {
             // hva skjer nå bruker trykker på add
             print(textField.text)
             self.itemArray.append(textField.text!)
+            
+            self.defaults.set(self.itemArray, forKey: "ToDoListArray")
+            
             self.tableView.reloadData()
         }
         
