@@ -7,23 +7,28 @@
 //
 
 import UIKit
-
-class ToDoListViewController: UITableViewController {
+import CoreData
+class ToDoListViewController: UITableViewController, UISearchBarDelegate {
     
     var itemArray = [Item]()
+    
+    var selectedCategory : Category? {
+        didSet{
+            loadItems()
+        }
+    }
+    
     let defaults = UserDefaults.standard //persistent local data storage
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    
+    
     
 
     override func viewDidLoad() {
         super.viewDidLoad()
         
         
-        
-        
-        
-        
-        loadItems()
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -65,10 +70,15 @@ class ToDoListViewController: UITableViewController {
         
         let action = UIAlertAction(title: "Legg til Item", style: .default) { (action) in
             
-            let newItem = Item()
+            
+            
+            let newItem = Item(context: self.context)
             newItem.title = textField.text!
             // hva skjer nå bruker trykker på add
-            print(textField.text)
+            newItem.done = false
+            
+            newItem.parentCategory = self.selectedCategory
+            
             self.itemArray.append(newItem)
             
            self.saveItems()
@@ -89,11 +99,11 @@ class ToDoListViewController: UITableViewController {
     }
     
     func saveItems(){
-        let encoder = PropertyListEncoder()
+        
         do {
-            let data = try encoder.encode(itemArray)
-            try data.write(to: dataFilePath!)
+           try context.save()
         } catch {
+            
             print("Error, \(error)")
             
         }
@@ -102,15 +112,63 @@ class ToDoListViewController: UITableViewController {
         self.tableView.reloadData()
         
     }
-    func loadItems(){
-        if let data = try? Data(contentsOf: dataFilePath!){
-            let decoder = PropertyListDecoder()
-            do {
-            itemArray = try decoder.decode([Item].self, from: data)
-            } catch {
-                print("Error")
-            }
+    func loadItems(predicate: NSPredicate? = nil){
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
+        
+        if let additionalPredicate = predicate {
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
+            
+        } else {
+            request.predicate = categoryPredicate
+            
         }
+        
+        
+        do {
+          itemArray =  try context.fetch(request)
+        }
+        catch {
+            print("Error fetching data from context \(error)")
+        }
+        
+        
+    }
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request :  NSFetchRequest<Item> = Item.fetchRequest()
+        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        request.predicate = predicate
+        let sortDescriptor = NSSortDescriptor(key: "title", ascending: true)
+        request.sortDescriptors = [sortDescriptor]
+        loadItems(predicate: predicate)
+        
+        do {
+            itemArray =  try context.fetch(request)
+        }
+        catch {
+            print("Error fetching data from context \(error)")
+        }
+        tableView.reloadData()
+        
+        
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if searchBar.text?.count == 0{
+            //loadItems() //funker dette? fjern disse og legg til predicate: predicate
+            
+            DispatchQueue.main.async {
+                searchBar.resignFirstResponder()
+            }
+            
+            
+            
+            
+        }
+    }
+    
+    func deleteItems(){
+        
     }
 
 }
