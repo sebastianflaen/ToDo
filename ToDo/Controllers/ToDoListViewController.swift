@@ -7,10 +7,11 @@
 //
 
 import UIKit
-import CoreData
+import RealmSwift
 class ToDoListViewController: UITableViewController, UISearchBarDelegate {
     
-    var itemArray = [Item]()
+    var toDoItems : Results<Item>?
+    let realm = try! Realm()
     
     var selectedCategory : Category? {
         didSet{
@@ -20,7 +21,7 @@ class ToDoListViewController: UITableViewController, UISearchBarDelegate {
     
     let defaults = UserDefaults.standard //persistent local data storage
     
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+   
     
     
     
@@ -32,32 +33,44 @@ class ToDoListViewController: UITableViewController, UISearchBarDelegate {
     }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return itemArray.count
+        return toDoItems?.count ?? 1
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
-        let item = itemArray[indexPath.row]
-        cell.textLabel?.text = item.title
-        
-        
-        if item.done == true {
-            cell.accessoryType = .checkmark
+        if let item = toDoItems?[indexPath.row] {
+            cell.textLabel?.text = item.title
+            
+            
+            if item.done == true {
+                cell.accessoryType = .checkmark
+            } else {
+                cell.accessoryType = .none
+            }
+            
         } else {
-            cell.accessoryType = .none
+            cell.textLabel?.text = "Ingen items"
         }
+        
+        
+       
         return cell
     }
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        if itemArray[indexPath.row].done == false {
-            itemArray[indexPath.row].done = true
-        } else {
-            itemArray[indexPath.row].done = false
-        }
-       
-        self.saveItems()
         
+        if let item = toDoItems?[indexPath.row] {
+            do {
+                try realm.write {
+                    item.done = !item.done
+                }
+            } catch {
+                print("error, \(error)")
+            }
+            
+            
+        }
+        tableView.reloadData()
         tableView.deselectRow(at: indexPath, animated: true)
     }
     
@@ -70,18 +83,24 @@ class ToDoListViewController: UITableViewController, UISearchBarDelegate {
         
         let action = UIAlertAction(title: "Legg til Item", style: .default) { (action) in
             
+            if let currentCategory = self.selectedCategory {
+                do {
+                    try self.realm.write {
+                        let newItem = Item()
+                        newItem.title = textField.text!
+                        newItem.dateCreated = Date()
+                        currentCategory.items.append(newItem)
+                    }
+                } catch {
+                    print("error")
+                }
+                
+                
+            }
+           
             
             
-            let newItem = Item(context: self.context)
-            newItem.title = textField.text!
-            // hva skjer nå bruker trykker på add
-            newItem.done = false
-            
-            newItem.parentCategory = self.selectedCategory
-            
-            self.itemArray.append(newItem)
-            
-           self.saveItems()
+          
             
             
             self.tableView.reloadData()
@@ -98,44 +117,24 @@ class ToDoListViewController: UITableViewController, UISearchBarDelegate {
         
     }
     
-    func saveItems(){
-        
-        do {
-           try context.save()
-        } catch {
-            
-            print("Error, \(error)")
-            
-        }
-        
-        
-        self.tableView.reloadData()
-        
-    }
+    
     func loadItems(predicate: NSPredicate? = nil){
-        let request : NSFetchRequest<Item> = Item.fetchRequest()
-        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
-        
-        if let additionalPredicate = predicate {
-            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
-            
-        } else {
-            request.predicate = categoryPredicate
-            
-        }
+        toDoItems = selectedCategory?.items.sorted(byKeyPath: "title", ascending: true)
+        tableView.reloadData()
         
         
-        do {
-          itemArray =  try context.fetch(request)
-        }
-        catch {
-            print("Error fetching data from context \(error)")
-        }
-        
-        
+    
     }
+    
+    
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-        let request :  NSFetchRequest<Item> = Item.fetchRequest()
+        toDoItems = toDoItems?.filter("title CONTAINS[cd] %@", searchBar.text! ).sorted(byKeyPath: "dateCreated", ascending: true)
+        
+        tableView.reloadData()
+      
+        
+        
+        /*  let request :  NSFetchRequest<Item> = Item.fetchRequest()
         let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
         request.predicate = predicate
         let sortDescriptor = NSSortDescriptor(key: "title", ascending: true)
@@ -143,13 +142,14 @@ class ToDoListViewController: UITableViewController, UISearchBarDelegate {
         loadItems(predicate: predicate)
         
         do {
-            itemArray =  try context.fetch(request)
+            toDoItems =  try context.fetch(request)
         }
         catch {
             print("Error fetching data from context \(error)")
         }
         tableView.reloadData()
         
+        */
         
     }
     
@@ -170,6 +170,9 @@ class ToDoListViewController: UITableViewController, UISearchBarDelegate {
     func deleteItems(){
         
     }
+ 
+ 
 
 }
+
 
